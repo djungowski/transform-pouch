@@ -1,9 +1,10 @@
 'use strict';
 
-var Promise = require('lie');
+// var Promise = require('lie');
 var utils = require('./pouch-utils');
 var wrappers = require('pouchdb-wrappers');
 var immediate = require('immediate');
+// var PouchDB = require('pouchdb-core');
 
 function isntInternalKey(key) {
   return key[0] !== '_';
@@ -89,17 +90,26 @@ exports.transform = exports.filter = function transform(config) {
     });
   };
 
+  // var originalBulkDocs = PouchDB.prototype.bulkDocs;
+
+  var foo = 0;
   handlers.bulkDocs = function (orig, args) {
-    for (var i = 0; i < args.docs.length; i++) {
-      args.docs[i] = incoming(args.docs[i]);
+    foo++;
+    console.log('bulkDocs');
+    // console.log(orig);
+    // console.log(args);
+    // console.log(arguments);
+    if (foo === 2) {
+      debugger;
     }
-    return Promise.all(args.docs).then(function (docs) {
-      args.docs = docs;
-      return orig();
-    });
+    for (var i = 0; i < args.docs.length; i++) {
+        args.docs[i] = incoming(args.docs[i]);
+    }
+    return utils.Promise.all(args.docs).then(orig);
   };
 
   handlers.allDocs = function (orig) {
+    console.log('allDocs');
     return orig().then(function (res) {
       var none = {};
       return utils.Promise.all(res.rows.map(function (row) {

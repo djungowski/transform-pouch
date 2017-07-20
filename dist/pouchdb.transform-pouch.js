@@ -2,10 +2,11 @@
 (function (process){
 'use strict';
 
-var Promise = require('lie');
+// var Promise = require('lie');
 var utils = require('./pouch-utils');
 var wrappers = require('pouchdb-wrappers');
 var immediate = require('immediate');
+// var PouchDB = require('pouchdb-core');
 
 function isntInternalKey(key) {
   return key[0] !== '_';
@@ -91,17 +92,26 @@ exports.transform = exports.filter = function transform(config) {
     });
   };
 
+  // var originalBulkDocs = PouchDB.prototype.bulkDocs;
+
+  var foo = 0;
   handlers.bulkDocs = function (orig, args) {
-    for (var i = 0; i < args.docs.length; i++) {
-      args.docs[i] = incoming(args.docs[i]);
+    foo++;
+    console.log('bulkDocs');
+    // console.log(orig);
+    // console.log(args);
+    // console.log(arguments);
+    if (foo === 2) {
+      debugger;
     }
-    return Promise.all(args.docs).then(function (docs) {
-      args.docs = docs;
-      return orig();
-    });
+    for (var i = 0; i < args.docs.length; i++) {
+        args.docs[i] = incoming(args.docs[i]);
+    }
+    return utils.Promise.all(args.docs).then(orig);
   };
 
   handlers.allDocs = function (orig) {
+    console.log('allDocs');
     return orig().then(function (res) {
       var none = {};
       return utils.Promise.all(res.rows.map(function (row) {
@@ -166,7 +176,7 @@ exports.transform = exports.filter = function transform(config) {
     var origThen = changes.then;
     changes.then = function (resolve, reject) {
       return origThen.apply(changes, [function (res) {
-        modifyChanges(res).then(resolve, reject);
+        return modifyChanges(res).then(resolve, reject);
       }, reject]);
     };
     return changes;
@@ -180,7 +190,7 @@ if (typeof window !== 'undefined' && window.PouchDB) {
 }
 
 }).call(this,require('_process'))
-},{"./pouch-utils":10,"_process":8,"immediate":2,"lie":4,"pouchdb-wrappers":7}],2:[function(require,module,exports){
+},{"./pouch-utils":10,"_process":8,"immediate":2,"pouchdb-wrappers":7}],2:[function(require,module,exports){
 (function (global){
 'use strict';
 var Mutation = global.MutationObserver || global.WebKitMutationObserver;
@@ -1233,7 +1243,6 @@ function uninstallWrappers(base, handlers) {
 
 },{"promise-nodify":9}],8:[function(require,module,exports){
 // shim for using process in browser
-
 var process = module.exports = {};
 
 // cached from whatever global is present so that test runners that stub it
@@ -1244,22 +1253,84 @@ var process = module.exports = {};
 var cachedSetTimeout;
 var cachedClearTimeout;
 
+function defaultSetTimout() {
+    throw new Error('setTimeout has not been defined');
+}
+function defaultClearTimeout () {
+    throw new Error('clearTimeout has not been defined');
+}
 (function () {
-  try {
-    cachedSetTimeout = setTimeout;
-  } catch (e) {
-    cachedSetTimeout = function () {
-      throw new Error('setTimeout is not defined');
+    try {
+        if (typeof setTimeout === 'function') {
+            cachedSetTimeout = setTimeout;
+        } else {
+            cachedSetTimeout = defaultSetTimout;
+        }
+    } catch (e) {
+        cachedSetTimeout = defaultSetTimout;
     }
-  }
-  try {
-    cachedClearTimeout = clearTimeout;
-  } catch (e) {
-    cachedClearTimeout = function () {
-      throw new Error('clearTimeout is not defined');
+    try {
+        if (typeof clearTimeout === 'function') {
+            cachedClearTimeout = clearTimeout;
+        } else {
+            cachedClearTimeout = defaultClearTimeout;
+        }
+    } catch (e) {
+        cachedClearTimeout = defaultClearTimeout;
     }
-  }
 } ())
+function runTimeout(fun) {
+    if (cachedSetTimeout === setTimeout) {
+        //normal enviroments in sane situations
+        return setTimeout(fun, 0);
+    }
+    // if setTimeout wasn't available but was latter defined
+    if ((cachedSetTimeout === defaultSetTimout || !cachedSetTimeout) && setTimeout) {
+        cachedSetTimeout = setTimeout;
+        return setTimeout(fun, 0);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedSetTimeout(fun, 0);
+    } catch(e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't trust the global object when called normally
+            return cachedSetTimeout.call(null, fun, 0);
+        } catch(e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error
+            return cachedSetTimeout.call(this, fun, 0);
+        }
+    }
+
+
+}
+function runClearTimeout(marker) {
+    if (cachedClearTimeout === clearTimeout) {
+        //normal enviroments in sane situations
+        return clearTimeout(marker);
+    }
+    // if clearTimeout wasn't available but was latter defined
+    if ((cachedClearTimeout === defaultClearTimeout || !cachedClearTimeout) && clearTimeout) {
+        cachedClearTimeout = clearTimeout;
+        return clearTimeout(marker);
+    }
+    try {
+        // when when somebody has screwed with setTimeout but no I.E. maddness
+        return cachedClearTimeout(marker);
+    } catch (e){
+        try {
+            // When we are in I.E. but the script has been evaled so I.E. doesn't  trust the global object when called normally
+            return cachedClearTimeout.call(null, marker);
+        } catch (e){
+            // same as above but when it's a version of I.E. that must have the global object for 'this', hopfully our context correct otherwise it will throw a global error.
+            // Some versions of I.E. have different rules for clearTimeout vs setTimeout
+            return cachedClearTimeout.call(this, marker);
+        }
+    }
+
+
+
+}
 var queue = [];
 var draining = false;
 var currentQueue;
@@ -1284,7 +1355,7 @@ function drainQueue() {
     if (draining) {
         return;
     }
-    var timeout = cachedSetTimeout(cleanUpNextTick);
+    var timeout = runTimeout(cleanUpNextTick);
     draining = true;
 
     var len = queue.length;
@@ -1301,7 +1372,7 @@ function drainQueue() {
     }
     currentQueue = null;
     draining = false;
-    cachedClearTimeout(timeout);
+    runClearTimeout(timeout);
 }
 
 process.nextTick = function (fun) {
@@ -1313,7 +1384,7 @@ process.nextTick = function (fun) {
     }
     queue.push(new Item(fun, args));
     if (queue.length === 1 && !draining) {
-        cachedSetTimeout(drainQueue, 0);
+        runTimeout(drainQueue);
     }
 };
 
@@ -1341,6 +1412,10 @@ process.off = noop;
 process.removeListener = noop;
 process.removeAllListeners = noop;
 process.emit = noop;
+process.prependListener = noop;
+process.prependOnceListener = noop;
+
+process.listeners = function (name) { return [] }
 
 process.binding = function (name) {
     throw new Error('process.binding is not supported');

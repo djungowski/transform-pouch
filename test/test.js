@@ -16,7 +16,10 @@ chai.use(require("chai-as-promised"));
 var should = chai.should();
 var Promise = require('lie');
 
-var dbs = 'testdb,http://localhost:5984/testdb';
+// var dbs = 'testdb,http://localhost:5984/testdb';
+var dbs = 'testdb';
+// var dbs = 'http://localhost:5984/testdb';
+// var dbs = 'testdb';
 
 dbs.split(',').forEach(function (db) {
   var dbType = /^http/.test(db) ? 'http' : 'local';
@@ -694,18 +697,21 @@ function tests(dbName, dbType) {
     var encrypt;
     var decrypt;
     if (typeof process !== 'undefined' && !process.browser) {
-      var crypto = require('crypto');
+      var cryptKey = 'ENCRYPTED: ';
+      // var crypto = require('crypto');
 
       encrypt = function (text) {
-        var cipher = crypto.createCipher('aes-256-cbc', 'password');
-        var crypted = cipher.update(text, 'utf8', 'base64');
-        return crypted + cipher.final('base64');
+        return cryptKey + text;
+        // var cipher = crypto.createCipher('aes-256-cbc', 'password');
+        // var crypted = cipher.update(text, 'utf8', 'base64');
+        // return crypted + cipher.final('base64');
       };
 
       decrypt = function (text) {
-        var decipher = crypto.createDecipher('aes-256-cbc', 'password');
-        var dec = decipher.update(text, 'base64', 'utf8');
-        return dec + decipher.final('utf8');
+        return text.substr(cryptKey.length);
+        // var decipher = crypto.createDecipher('aes-256-cbc', 'password');
+        // var dec = decipher.update(text, 'base64', 'utf8');
+        // return dec + decipher.final('utf8');
       };
     } else { // browser
       encrypt = btoa;
